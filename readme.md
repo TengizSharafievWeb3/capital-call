@@ -11,5 +11,5 @@
 
 ```bash
 anchor build
-anchor test --provider.cluster localnet
+anchor test
 ```

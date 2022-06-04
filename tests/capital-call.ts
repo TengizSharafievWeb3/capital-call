@@ -440,4 +440,31 @@ describe("capital-call", () => {
 
     expect(await tokenBalance(ata2)).to.be.equal(1_000_000);
   });
+
+  // TODO for tests (negative):
+  // Should NOT init with invalid lp mint authority
+  // Should NOT init with invalid liquidity_pool mint
+  // Should NOT create capital call with invalid authority
+  // Should NOT create capital call with invalid lpMint
+  // Should NOT create capital call with invalid mint
+  // Should NOT create capital call with start_time in past
+  // Should NOT create capital call with zero duration
+  // Should NOT create capital call with zero capacity
+  // Should NOT deposit before start_time
+  // Should NOT deposit after end_time
+  // Should NOT deposit after capital fully funded
+  // Should NOT deposit with zero amount
+  // Should NOT refund until end_time
+  // Should NOT refund if capital fully funded
+  // Should NOT refund multiple times the same user
+  // Should NOT refund user without voucher
+  // Should NOT mint lp tokens with invalid lp mint authority
+  // Should NOT mint lp tokens with zero lp supply
+  // Should NOT fail mint lp tokens if capital call is not fully funded
+  // Should NOT fail mint lp tokens if lp tokens already minted
+  // Should NOT claim if lp tokens not minted
+  // Should NOT claim multiple times the same user
+  // Should NOT claim user without voucher
+  // Should NOT close if not fully redeemed
+  // Should close with extra tokens or lp tokens (funded with direct transfer)
 });

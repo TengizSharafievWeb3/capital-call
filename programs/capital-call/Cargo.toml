@@ -12,7 +12,6 @@ name = "capital_call"
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-mock-mint = []
 cpi = ["no-entrypoint"]
 default = []
 

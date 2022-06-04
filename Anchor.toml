@@ -2,7 +2,7 @@
 seeds = true
 
 [programs.localnet]
-capital_call = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+capital_call = "HRsNi3EmPjTLwEfekPYzBQmdy5UqZ7MKmcvi5rjuHder"
 
 [registry]
 url = "https://anchor.projectserum.com"

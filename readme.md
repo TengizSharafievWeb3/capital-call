@@ -10,6 +10,6 @@
 ### Build and run tests
 
 ```bash
-anchor build -- --features mock-mint
-anchor test --provider.cluster localnet -- --features mock-mint
+anchor build
+anchor test --provider.cluster localnet
 ```

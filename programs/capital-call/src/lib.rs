@@ -3,7 +3,7 @@ use anchor_lang::solana_program::clock::Clock;
 use anchor_lang::solana_program::program_option::COption;
 use anchor_spl::token::{self, Burn, CloseAccount, Mint, MintTo, Token, TokenAccount, Transfer};
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("HRsNi3EmPjTLwEfekPYzBQmdy5UqZ7MKmcvi5rjuHder");
 
 pub const SEED_CAPITAL_CALL: [u8; 12] = *b"capital_call";
 pub const SEED_VAULT: [u8; 5] = *b"vault";
@@ -11,10 +11,6 @@ pub const SEED_LP_TOKEN_POOL: [u8; 13] = *b"lp_token_pool";
 pub const SEED_VOUCHER: [u8; 7] = *b"voucher";
 pub const SEED_LP_MINT_AUTHORITY: [u8; 17] = *b"lp_mint_authority";
 
-#[cfg(not(feature = "mock-mint"))]
-pub const MINT_PUBKEY: &str = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
-
-#[cfg(feature = "mock-mint")]
 pub const MINT_PUBKEY: &str = "ETE5KJSyx1XitibZc9hb35AneRmCH8riJzyxr9beKtZ6";
 
 #[program]
@@ -23,7 +19,7 @@ pub mod capital_call {
 
     /// Initialize Config
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        ctx.accounts.config.authority = ctx.accounts.payer.key();
+        ctx.accounts.config.authority = ctx.accounts.authority.key();
         ctx.accounts.config.liquidity_pool = ctx.accounts.liquidity_pool.key();
         ctx.accounts.config.lp_mint = ctx.accounts.lp_mint.key();
         ctx.accounts.config.lp_mint_authority = ctx.accounts.lp_mint_authority.key();
@@ -210,7 +206,7 @@ pub mod capital_call {
         }
 
         ctx.accounts.capital_call.lp_supply = ctx.accounts.lp_mint.supply;
-        ctx.accounts.capital_call.token_liquidity = ctx.accounts.capital_call.token_liquidity;
+        ctx.accounts.capital_call.token_liquidity = ctx.accounts.liquidity_pool.amount;
 
         let minted = ctx
             .accounts
@@ -321,16 +317,19 @@ pub mod capital_call {
         let now = clock.unix_timestamp as u64;
         let capital_call = &ctx.accounts.capital_call;
 
-        require!(
-            now > capital_call.end_time
-                && !capital_call.is_lp_minted
-                && capital_call.allocated == capital_call.redeemed,
-            CapitalCallError::CapitalCallHasToBeFullyRefunded
-        );
-        require!(
-            capital_call.is_lp_minted && capital_call.allocated == capital_call.redeemed,
-            CapitalCallError::LpTokensHasToBeFullyDistributed
-        );
+        if !capital_call.is_lp_minted {
+            if now > capital_call.end_time {
+                require!(
+                    capital_call.allocated == capital_call.redeemed,
+                    CapitalCallError::CapitalCallHasToBeFullyRefunded
+                );
+            }
+        } else {
+            require!(
+                capital_call.allocated == capital_call.redeemed,
+                CapitalCallError::LpTokensHasToBeFullyDistributed
+            );
+        }
 
         // Someone can transfer tokens directly to vault
         let config_key = capital_call.config;
@@ -405,6 +404,9 @@ pub struct Initialize<'info> {
     )]
     pub config: Account<'info, Config>,
 
+    /// CHECK: Only for key
+    pub authority: UncheckedAccount<'info>,
+
     /// CHECK: Only for bump calculation
     #[account(
         seeds = [
@@ -416,6 +418,9 @@ pub struct Initialize<'info> {
 
     pub lp_mint: Account<'info, Mint>,
 
+    #[account(
+        constraint = liquidity_pool.mint == MINT_PUBKEY.parse::<Pubkey>().unwrap()
+    )]
     pub liquidity_pool: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -454,7 +459,6 @@ pub struct CreateCapitalCall<'info> {
         token::authority = capital_call,
         seeds = [
             SEED_VAULT.as_ref(),
-            config.key().as_ref(),
             capital_call.key().as_ref(),
         ],
         bump
@@ -471,7 +475,6 @@ pub struct CreateCapitalCall<'info> {
         token::authority = capital_call,
         seeds = [
             SEED_LP_TOKEN_POOL.as_ref(),
-            config.key().as_ref(),
             capital_call.key().as_ref(),
         ], bump
     )]
@@ -519,7 +522,6 @@ pub struct Deposit<'info> {
         mut,
         seeds = [
             SEED_VAULT.as_ref(),
-            capital_call.config.as_ref(),
             capital_call.key().as_ref(),
         ],
         bump = capital_call.vault_bump,
@@ -529,6 +531,7 @@ pub struct Deposit<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
+    #[account(mut)]
     pub source: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
@@ -581,7 +584,6 @@ pub struct Refund<'info> {
         mut,
         seeds = [
             SEED_VAULT.as_ref(),
-            capital_call.config.as_ref(),
             capital_call.key().as_ref(),
         ],
         bump = capital_call.vault_bump,
@@ -591,6 +593,7 @@ pub struct Refund<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
+    #[account(mut)]
     pub destination: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
@@ -637,13 +640,13 @@ pub struct MintLpTokens<'info> {
         mut,
         seeds = [
             SEED_VAULT.as_ref(),
-            capital_call.config.as_ref(),
             capital_call.key().as_ref(),
         ],
         bump = capital_call.vault_bump,
     )]
     pub vault: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub liquidity_pool: Account<'info, TokenAccount>,
 
     /// CHECK: Only for bump calculation
@@ -658,8 +661,7 @@ pub struct MintLpTokens<'info> {
     #[account(
         mut,
         seeds = [
-        SEED_LP_TOKEN_POOL.as_ref(),
-            config.key().as_ref(),
+            SEED_LP_TOKEN_POOL.as_ref(),
             capital_call.key().as_ref(),
         ],
         bump = capital_call.lp_token_pool_bump
@@ -691,12 +693,12 @@ pub struct Claim<'info> {
         mut,
         seeds = [
             SEED_LP_TOKEN_POOL.as_ref(),
-            capital_call.config.as_ref(),
             capital_call.key().as_ref()],
         bump = capital_call.lp_token_pool_bump
     )]
     pub lp_token_pool: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub authority: Signer<'info>,
 
     #[account(
@@ -763,7 +765,6 @@ pub struct CloseCapitalCall<'info> {
         mut,
         seeds = [
             SEED_LP_TOKEN_POOL.as_ref(),
-            config.key().as_ref(),
             capital_call.key().as_ref()],
         bump = capital_call.lp_token_pool_bump
     )]
@@ -773,7 +774,6 @@ pub struct CloseCapitalCall<'info> {
         mut,
         seeds = [
             SEED_VAULT.as_ref(),
-            config.key().as_ref(),
             capital_call.key().as_ref()],
         bump = capital_call.vault_bump,
     )]
